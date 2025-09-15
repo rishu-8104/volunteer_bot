@@ -1,12 +1,23 @@
 // api/index.js - Main Vercel serverless function
 require('dotenv').config();
-const { App } = require('@slack/bolt');
+const { App, ExpressReceiver } = require('@slack/bolt');
+const express = require('express');
 
-// Initialize Slack Bolt app with HTTP mode for Vercel
-const app = new App({
-  token: process.env.SLACK_BOT_TOKEN,
+// Initialize Express app
+const expressApp = express();
+expressApp.use(express.json());
+expressApp.use(express.urlencoded({ extended: true }));
+
+// Initialize ExpressReceiver
+const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
   processBeforeResponse: true
+});
+
+// Initialize Slack Bolt app
+const app = new App({
+  token: process.env.SLACK_BOT_TOKEN,
+  receiver: receiver
 });
 
 // Enhanced function to extract key information from user messages
@@ -635,12 +646,6 @@ app.action('search_again', async ({ ack, respond }) => {
 });
 
 // Health check endpoint
-const express = require('express');
-const expressApp = express();
-
-// Add middleware for parsing JSON
-expressApp.use(express.json());
-expressApp.use(express.urlencoded({ extended: true }));
 
 expressApp.get('/', (req, res) => {
   res.json({
@@ -659,37 +664,10 @@ expressApp.get('/slack/events', (req, res) => {
   });
 });
 
-// Slack endpoints - handle challenge verification
-expressApp.post('/slack/events', (req, res) => {
-  console.log('=== Slack Events Endpoint Hit ===');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  console.log('Headers:', req.headers);
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-  
-  try {
-    // Handle Slack URL verification challenge
-    if (req.body && req.body.type === 'url_verification') {
-      console.log('✅ URL verification challenge received:', req.body.challenge);
-      res.status(200).send(req.body.challenge);
-      return;
-    }
-    
-    // Handle other events
-    console.log('📨 Processing event type:', req.body?.type);
-    app.receiver.requestHandler(req, res);
-  } catch (error) {
-    console.error('❌ Error in /slack/events:', error);
-    res.status(500).json({ 
-      error: 'Internal Server Error', 
-      details: error.message,
-      stack: error.stack 
-    });
-  }
-});
-
-expressApp.use('/slack/interactive', app.receiver.requestHandler);
-expressApp.use('/slack/commands', app.receiver.requestHandler);
+// Slack endpoints using ExpressReceiver
+expressApp.use('/slack/events', receiver.router);
+expressApp.use('/slack/interactive', receiver.router);
+expressApp.use('/slack/commands', receiver.router);
 
 // Export the Express app for Vercel
 module.exports = expressApp;
