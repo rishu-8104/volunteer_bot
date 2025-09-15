@@ -402,27 +402,8 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
       }
     ];
 
-    // Add opportunity buttons (limit to 3 for better UX)
+    // Add opportunity details as text (simpler format)
     if (matches.length > 0) {
-      const opportunityButtons = matches.slice(0, 3).map(opportunity => ({
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: `${opportunity.title} (${opportunity.max_participants} max)`
-        },
-        action_id: "book_opportunity",
-        value: JSON.stringify({
-          requestId: savedRequest.id,
-          opportunityId: opportunity.id
-        })
-      }));
-
-      blocks.push({
-        type: "actions",
-        elements: opportunityButtons
-      });
-
-      // Add opportunity details as text
       const opportunityDetails = matches.slice(0, 3).map(opp =>
         `• *${opp.title}* - ${opp.ngo_name}\n  📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}`
       ).join('\n\n');
@@ -434,6 +415,22 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
           text: `*Opportunity Details:*\n${opportunityDetails}`
         }
       });
+
+      // Add simple buttons (limit to 2 to avoid issues)
+      const opportunityButtons = matches.slice(0, 2).map(opportunity => ({
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: opportunity.title.length > 20 ? opportunity.title.substring(0, 17) + "..." : opportunity.title
+        },
+        action_id: "book_opportunity",
+        value: `${savedRequest.id}_${opportunity.id}`
+      }));
+
+      blocks.push({
+        type: "actions",
+        elements: opportunityButtons
+      });
     } else {
       blocks.push({
         type: "section",
@@ -443,21 +440,6 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
         }
       });
     }
-
-    // Add a refresh button
-    blocks.push({
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-            text: "🔄 Search Again"
-              },
-          action_id: "search_again"
-        }
-      ]
-    });
 
     await respond({
       blocks: blocks
@@ -476,7 +458,8 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
   await ack();
 
   try {
-    const { requestId, opportunityId } = JSON.parse(body.actions[0].value);
+    const value = body.actions[0].value;
+    const [requestId, opportunityId] = value.split('_');
 
     // Find opportunity details from our array
     const opportunity = volunteerOpportunities.find(opp => opp.id === parseInt(opportunityId));
@@ -686,7 +669,7 @@ expressApp.post('/slack/commands', (req, res) => {
   console.log('=== Slash Command Endpoint Hit ===');
   console.log('Body:', JSON.stringify(req.body, null, 2));
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  
+
   try {
     // Handle slash command using the app
     console.log('Calling receiver.requestHandler...');
@@ -695,8 +678,8 @@ expressApp.post('/slack/commands', (req, res) => {
   } catch (error) {
     console.error('❌ Error in slash command:', error);
     console.error('Error stack:', error.stack);
-    res.status(500).json({ 
-      error: 'Internal Server Error', 
+    res.status(500).json({
+      error: 'Internal Server Error',
       details: error.message,
       stack: error.stack
     });
