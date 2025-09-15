@@ -685,15 +685,20 @@ expressApp.post('/slack/events', (req, res) => {
 expressApp.post('/slack/commands', (req, res) => {
   console.log('=== Slash Command Endpoint Hit ===');
   console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   
   try {
     // Handle slash command using the app
+    console.log('Calling receiver.requestHandler...');
     receiver.requestHandler(req, res);
+    console.log('receiver.requestHandler completed');
   } catch (error) {
     console.error('❌ Error in slash command:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ 
       error: 'Internal Server Error', 
-      details: error.message 
+      details: error.message,
+      stack: error.stack
     });
   }
 });
