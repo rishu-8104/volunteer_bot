@@ -391,58 +391,21 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
     // Find matching opportunities immediately
     const matches = await findMatches(parsed);
 
-    // Create interactive message with parsed details and opportunity buttons
-    const blocks = [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-          text: `🤝 *Volunteer Request Parsed*\n\n*Team Size:* ${parsed.teamSize} people\n*Activity:* ${parsed.activity}\n*When:* ${parsed.timing}\n\n🎯 *Found ${matches.length} matching opportunities:*`
-        }
-      }
-    ];
+    // Create simple text response (no blocks for now)
+    let responseText = `🤝 *Volunteer Request Parsed*\n\n*Team Size:* ${parsed.teamSize} people\n*Activity:* ${parsed.activity}\n*When:* ${parsed.timing}\n\n🎯 *Found ${matches.length} matching opportunities:*\n\n`;
 
-    // Add opportunity details as text (simpler format)
     if (matches.length > 0) {
       const opportunityDetails = matches.slice(0, 3).map(opp =>
-        `• *${opp.title}* - ${opp.ngo_name}\n  📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}`
+        `• *${opp.title}* - ${opp.ngo_name}\n  📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n  📧 ${opp.contact_email}`
       ).join('\n\n');
 
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `*Opportunity Details:*\n${opportunityDetails}`
-        }
-      });
-
-      // Add simple buttons (limit to 2 to avoid issues)
-      const opportunityButtons = matches.slice(0, 2).map(opportunity => ({
-        type: "button",
-        text: {
-          type: "plain_text",
-          text: opportunity.title.length > 20 ? opportunity.title.substring(0, 17) + "..." : opportunity.title
-        },
-        action_id: "book_opportunity",
-        value: `${savedRequest.id}_${opportunity.id}`
-      }));
-
-      blocks.push({
-        type: "actions",
-        elements: opportunityButtons
-      });
+      responseText += `*Opportunity Details:*\n${opportunityDetails}`;
     } else {
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "😔 No specific matches found, but here are some general opportunities:"
-        }
-      });
+      responseText += "😔 No specific matches found, but here are some general opportunities:";
     }
 
     await respond({
-      blocks: blocks
+      text: responseText
     });
 
   } catch (error) {
