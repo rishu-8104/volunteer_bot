@@ -668,14 +668,14 @@ expressApp.get('/slack/events', (req, res) => {
 expressApp.post('/slack/events', (req, res) => {
   console.log('=== Slack Events Endpoint Hit ===');
   console.log('Body:', JSON.stringify(req.body, null, 2));
-  
+
   // Handle URL verification challenge
   if (req.body && req.body.type === 'url_verification') {
     console.log('✅ URL verification challenge received:', req.body.challenge);
     res.status(200).json({ challenge: req.body.challenge });
     return;
   }
-  
+
   // Handle other events using ExpressReceiver
   console.log('📨 Processing event type:', req.body?.type);
   receiver.requestHandler(req, res);
@@ -684,6 +684,15 @@ expressApp.post('/slack/events', (req, res) => {
 // Other Slack endpoints using ExpressReceiver
 expressApp.use('/slack/interactive', receiver.router);
 expressApp.use('/slack/commands', receiver.router);
+
+// Debug endpoint to test routing
+expressApp.get('/slack/commands', (req, res) => {
+  res.json({
+    message: 'Slack commands endpoint is ready',
+    method: 'Use POST for actual commands',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Export the Express app for Vercel
 module.exports = expressApp;
