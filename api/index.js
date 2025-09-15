@@ -646,8 +646,17 @@ expressApp.get('/', (req, res) => {
   });
 });
 
-// Slack endpoints
-expressApp.use('/slack/events', app.receiver.requestHandler);
+// Slack endpoints - handle challenge verification
+expressApp.use('/slack/events', (req, res) => {
+  // Handle Slack challenge verification
+  if (req.body && req.body.challenge) {
+    res.send(req.body.challenge);
+    return;
+  }
+  // Handle other events
+  app.receiver.requestHandler(req, res);
+});
+
 expressApp.use('/slack/interactive', app.receiver.requestHandler);
 expressApp.use('/slack/commands', app.receiver.requestHandler);
 
