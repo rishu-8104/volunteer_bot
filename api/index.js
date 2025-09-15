@@ -650,27 +650,41 @@ expressApp.get('/', (req, res) => {
   });
 });
 
+// Test endpoint for Slack events
+expressApp.get('/slack/events', (req, res) => {
+  res.json({
+    message: 'Slack events endpoint is ready',
+    method: 'Use POST for actual events',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Slack endpoints - handle challenge verification
 expressApp.post('/slack/events', (req, res) => {
-  console.log('Slack events endpoint hit:', req.method, req.url);
-  console.log('Body:', req.body);
+  console.log('=== Slack Events Endpoint Hit ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Headers:', req.headers);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { type, challenge } = req.body;
-    
     // Handle Slack URL verification challenge
-    if (type === 'url_verification') {
-      console.log('URL verification challenge received:', challenge);
-      res.status(200).send(challenge);
+    if (req.body && req.body.type === 'url_verification') {
+      console.log('✅ URL verification challenge received:', req.body.challenge);
+      res.status(200).send(req.body.challenge);
       return;
     }
     
     // Handle other events
-    console.log('Processing event type:', type);
+    console.log('📨 Processing event type:', req.body?.type);
     app.receiver.requestHandler(req, res);
   } catch (error) {
-    console.error('Error in /slack/events:', error);
-    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    console.error('❌ Error in /slack/events:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: error.message,
+      stack: error.stack 
+    });
   }
 });
 
