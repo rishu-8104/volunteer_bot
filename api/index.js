@@ -681,9 +681,25 @@ expressApp.post('/slack/events', (req, res) => {
   receiver.requestHandler(req, res);
 });
 
+// Manual slash command handler
+expressApp.post('/slack/commands', (req, res) => {
+  console.log('=== Slash Command Endpoint Hit ===');
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    // Handle slash command using the app
+    receiver.requestHandler(req, res);
+  } catch (error) {
+    console.error('❌ Error in slash command:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: error.message 
+    });
+  }
+});
+
 // Other Slack endpoints using ExpressReceiver
 expressApp.use('/slack/interactive', receiver.router);
-expressApp.use('/slack/commands', receiver.router);
 
 // Debug endpoint to test routing
 expressApp.get('/slack/commands', (req, res) => {
