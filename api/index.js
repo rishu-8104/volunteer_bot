@@ -648,13 +648,19 @@ expressApp.get('/', (req, res) => {
 
 // Slack endpoints - handle challenge verification
 expressApp.use('/slack/events', (req, res) => {
-  // Handle Slack challenge verification
-  if (req.body && req.body.challenge) {
-    res.send(req.body.challenge);
-    return;
+  try {
+    // Handle Slack challenge verification
+    if (req.body && req.body.challenge) {
+      console.log('Challenge received:', req.body.challenge);
+      res.send(req.body.challenge);
+      return;
+    }
+    // Handle other events
+    app.receiver.requestHandler(req, res);
+  } catch (error) {
+    console.error('Error in /slack/events:', error);
+    res.status(500).send('Internal Server Error');
   }
-  // Handle other events
-  app.receiver.requestHandler(req, res);
 });
 
 expressApp.use('/slack/interactive', app.receiver.requestHandler);
