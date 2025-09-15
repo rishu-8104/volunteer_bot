@@ -638,6 +638,10 @@ app.action('search_again', async ({ ack, respond }) => {
 const express = require('express');
 const expressApp = express();
 
+// Add middleware for parsing JSON
+expressApp.use(express.json());
+expressApp.use(express.urlencoded({ extended: true }));
+
 expressApp.get('/', (req, res) => {
   res.json({
     status: 'CommuBot is running!',
@@ -648,18 +652,23 @@ expressApp.get('/', (req, res) => {
 
 // Slack endpoints - handle challenge verification
 expressApp.use('/slack/events', (req, res) => {
+  console.log('Slack events endpoint hit:', req.method, req.url);
+  console.log('Body:', req.body);
+  
   try {
     // Handle Slack challenge verification
     if (req.body && req.body.challenge) {
       console.log('Challenge received:', req.body.challenge);
-      res.send(req.body.challenge);
+      res.status(200).send(req.body.challenge);
       return;
     }
+    
     // Handle other events
+    console.log('Processing event...');
     app.receiver.requestHandler(req, res);
   } catch (error) {
     console.error('Error in /slack/events:', error);
-    res.status(500).send('Internal Server Error');
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
 
