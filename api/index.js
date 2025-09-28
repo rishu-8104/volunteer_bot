@@ -528,7 +528,7 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
           }
         });
       });
-      
+
       // Add a "Show More" button if there are more than 5 matches
       if (matches.length > 5) {
         blocks.push({
@@ -566,24 +566,24 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
       });
     } catch (blocksError) {
       console.error('Error sending blocks, falling back to text:', blocksError);
-      
+
       // Fallback to simple text response
       let responseText = `🤝 *Volunteer Request Parsed*\n\n*Team Size:* ${parsed.teamSize} people\n*Activity:* ${parsed.activity}\n*When:* ${parsed.timing}\n\n🎯 *Found ${matches.length} matching opportunities:*\n\n`;
-      
+
       if (matches.length > 0) {
         const opportunityDetails = matches.slice(0, 5).map((opp, index) =>
           `${index + 1}. *${opp.title}* - ${opp.ngo_name}\n   📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n   📧 ${opp.contact_email}\n   📝 ${opp.description}`
         ).join('\n\n');
-        
+
         responseText += `*Opportunity Details:*\n${opportunityDetails}`;
-        
+
         if (matches.length > 5) {
           responseText += `\n\n*Note:* Showing first 5 of ${matches.length} opportunities. Use the command again to see more!`;
         }
       } else {
         responseText += "😔 No specific matches found. Try adjusting your search criteria.";
       }
-      
+
       await respond({
         text: responseText
       });
@@ -599,6 +599,9 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
 
 // Handle opportunity booking with comprehensive confirmation
 app.action('book_opportunity', async ({ body, ack, respond, client }) => {
+  console.log('=== BOOK OPPORTUNITY ACTION TRIGGERED ===');
+  console.log('Action body:', JSON.stringify(body, null, 2));
+
   await ack();
 
   try {
@@ -731,10 +734,10 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
       });
     } catch (blocksError) {
       console.error('Error sending booking confirmation blocks, falling back to text:', blocksError);
-      
+
       // Fallback to simple text response
       const textResponse = `✅ *Opportunity Booked Successfully!*\n\n🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Date & Time:* ${dateStr} (${opportunity.time_slot})\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n📝 *What You'll Be Doing:* ${opportunity.description}\n📧 *Contact Information:* ${opportunity.contact_email}\n\n🚀 *What Happens Next:*\n1️⃣ Confirmation email within 24 hours\n2️⃣ NGO will reach out with details\n3️⃣ Show up at the specified time and location\n4️⃣ Make a difference in your community! 🌟`;
-      
+
       await respond({
         text: textResponse,
         replace_original: true
@@ -807,7 +810,7 @@ app.action('show_all_opportunities', async ({ body, ack, respond }) => {
 
   try {
     const { allMatches } = JSON.parse(body.actions[0].value);
-    
+
     const blocks = [
       {
         type: "header",
@@ -1053,8 +1056,16 @@ expressApp.post('/slack/commands', (req, res) => {
   }
 });
 
-// Other Slack endpoints using ExpressReceiver
-expressApp.use('/slack/interactive', receiver.router);
+// Interactive components handler - use receiver.router for proper handling
+expressApp.use('/slack/interactive', (req, res, next) => {
+  console.log('=== Interactive Components Endpoint Hit ===');
+  console.log('Method:', req.method);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+
+  // Let the receiver handle the request
+  next();
+}, receiver.router);
 
 // Debug endpoint to test routing
 expressApp.get('/slack/commands', (req, res) => {
@@ -1062,6 +1073,29 @@ expressApp.get('/slack/commands', (req, res) => {
     message: 'Slack commands endpoint is ready',
     method: 'Use POST for actual commands',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Debug endpoint for interactive components
+expressApp.get('/slack/interactive', (req, res) => {
+  res.json({
+    message: 'Slack interactive components endpoint is ready',
+    method: 'Use POST for actual interactive components',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Test endpoint to verify the app is working
+expressApp.get('/test', (req, res) => {
+  res.json({
+    status: 'CommuBot is running!',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    endpoints: {
+      slash_commands: '/slack/commands',
+      interactive_components: '/slack/interactive',
+      events: '/slack/events'
+    }
   });
 });
 
