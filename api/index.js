@@ -1056,31 +1056,43 @@ expressApp.post('/slack/commands', (req, res) => {
   }
 });
 
-// Interactive components handler - use receiver.router for proper handling
-expressApp.use('/slack/interactive', (req, res, next) => {
-  console.log('=== Interactive Components Endpoint Hit ===');
+// Interactive components handler - direct POST handler
+expressApp.post('/slack/interactive', (req, res) => {
+  console.log('=== Interactive Components POST Endpoint Hit ===');
   console.log('Method:', req.method);
   console.log('Body:', JSON.stringify(req.body, null, 2));
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
 
-  // Let the receiver handle the request
-  next();
-}, receiver.router);
+  try {
+    // Handle interactive components using the receiver
+    console.log('Calling receiver.requestHandler for interactive components...');
+    receiver.requestHandler(req, res);
+    console.log('receiver.requestHandler completed for interactive components');
+  } catch (error) {
+    console.error('❌ Error in interactive components:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      details: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Also handle GET requests for testing
+expressApp.get('/slack/interactive', (req, res) => {
+  res.json({
+    message: 'Slack interactive components endpoint is ready',
+    method: 'Use POST for actual interactive components',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Debug endpoint to test routing
 expressApp.get('/slack/commands', (req, res) => {
   res.json({
     message: 'Slack commands endpoint is ready',
     method: 'Use POST for actual commands',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Debug endpoint for interactive components
-expressApp.get('/slack/interactive', (req, res) => {
-  res.json({
-    message: 'Slack interactive components endpoint is ready',
-    method: 'Use POST for actual interactive components',
     timestamp: new Date().toISOString()
   });
 });
