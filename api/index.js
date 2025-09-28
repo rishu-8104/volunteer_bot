@@ -2,6 +2,9 @@
 require('dotenv').config();
 const { App, ExpressReceiver } = require('@slack/bolt');
 const express = require('express');
+const { jsPDF } = require('jspdf');
+const fs = require('fs');
+const path = require('path');
 
 // Initialize Express app
 const expressApp = express();
@@ -353,9 +356,104 @@ const findMatches = async (request) => {
   return matches.slice(0, 5);
 };
 
+// In-memory storage for bookings and completions (in production, use a database)
+const bookings = new Map();
+const completedVolunteerWork = new Map();
+
 const saveRequest = async (requestData) => {
   // Mock save - in real implementation, save to database
   return { id: Math.floor(Math.random() * 1000) + 1 };
+};
+
+// Certificate generation function
+const generateCertificate = async (volunteerData) => {
+  try {
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    // Background color
+    doc.setFillColor(240, 248, 255);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+    // Border
+    doc.setDrawColor(0, 100, 200);
+    doc.setLineWidth(3);
+    doc.rect(15, 15, pageWidth - 30, pageHeight - 30);
+
+    // Title
+    doc.setFontSize(36);
+    doc.setTextColor(0, 100, 200);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CERTIFICATE OF APPRECIATION', pageWidth / 2, 50, { align: 'center' });
+
+    // Subtitle
+    doc.setFontSize(18);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.text('This is to certify that', pageWidth / 2, 70, { align: 'center' });
+
+    // Volunteer name
+    doc.setFontSize(28);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.text(volunteerData.volunteerName, pageWidth / 2, 100, { align: 'center' });
+
+    // Activity description
+    doc.setFontSize(16);
+    doc.setTextColor(50, 50, 50);
+    doc.setFont('helvetica', 'normal');
+    const activityText = `has successfully completed volunteer work for "${volunteerData.activityTitle}"`;
+    doc.text(activityText, pageWidth / 2, 120, { align: 'center' });
+
+    // Organization details
+    doc.setFontSize(14);
+    doc.text(`Organization: ${volunteerData.ngoName}`, pageWidth / 2, 140, { align: 'center' });
+    doc.text(`Location: ${volunteerData.location}`, pageWidth / 2, 155, { align: 'center' });
+    doc.text(`Date: ${volunteerData.completionDate}`, pageWidth / 2, 170, { align: 'center' });
+
+    // Impact statement
+    doc.setFontSize(12);
+    doc.setTextColor(100, 100, 100);
+    doc.text('Thank you for making a positive impact in your community!', pageWidth / 2, 190, { align: 'center' });
+
+    // Signature line
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('CommuBot Volunteer Platform', pageWidth / 2, 220, { align: 'center' });
+
+    // Certificate ID
+    doc.setFontSize(10);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Certificate ID: ${volunteerData.certificateId}`, pageWidth / 2, 240, { align: 'center' });
+
+    return doc.output('datauristring');
+  } catch (error) {
+    console.error('Error generating certificate:', error);
+    throw error;
+  }
+};
+
+// Function to mark volunteer work as completed
+const markVolunteerWorkCompleted = async (userId, opportunityId, volunteerName) => {
+  const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
+  if (!opportunity) {
+    throw new Error('Opportunity not found');
+  }
+
+  const completionData = {
+    userId,
+    opportunityId,
+    volunteerName,
+    activityTitle: opportunity.title,
+    ngoName: opportunity.ngo_name,
+    location: opportunity.location,
+    completionDate: new Date().toLocaleDateString(),
+    certificateId: `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  };
+
+  completedVolunteerWork.set(completionData.certificateId, completionData);
+  return completionData;
 };
 
 // Enhanced slash command handler with immediate opportunity display
@@ -391,21 +489,57 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
     // Find matching opportunities immediately
     const matches = await findMatches(parsed);
 
-    // Create simple text response (no blocks for now)
-    let responseText = `🤝 *Volunteer Request Parsed*\n\n*Team Size:* ${parsed.teamSize} people\n*Activity:* ${parsed.activity}\n*When:* ${parsed.timing}\n\n🎯 *Found ${matches.length} matching opportunities:*\n\n`;
+    // Create interactive blocks response with booking buttons
+    const blocks = [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: "🤝 Volunteer Opportunities Found"
+        }
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Your Request:*\n• Team Size: ${parsed.teamSize} people\n• Activity: ${parsed.activity}\n• When: ${parsed.timing}\n\n*Found ${matches.length} matching opportunities:*`
+        }
+      }
+    ];
 
     if (matches.length > 0) {
-      const opportunityDetails = matches.slice(0, 3).map(opp =>
-        `• *${opp.title}* - ${opp.ngo_name}\n  📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n  📧 ${opp.contact_email}`
-      ).join('\n\n');
-
-      responseText += `*Opportunity Details:*\n${opportunityDetails}`;
+      // Add each opportunity as a section with booking button
+      matches.slice(0, 3).forEach((opp, index) => {
+        blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*${index + 1}. ${opp.title}*\n🏢 ${opp.ngo_name}\n📍 ${opp.location}\n📅 ${opp.time_slot}\n👥 Max ${opp.max_participants} volunteers\n📝 ${opp.description}`
+          },
+          accessory: {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: `Book ${index + 1}`
+            },
+            action_id: "book_opportunity",
+            value: `${savedRequest.id}_${opp.id}`,
+            style: "primary"
+          }
+        });
+      });
     } else {
-      responseText += "😔 No specific matches found, but here are some general opportunities:";
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "😔 No specific matches found, but here are some general opportunities:"
+        }
+      });
     }
 
     await respond({
-      text: responseText
+      blocks: blocks
     });
 
   } catch (error) {
@@ -518,6 +652,19 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
             type: "button",
             text: {
               type: "plain_text",
+              text: "✅ Mark as Completed"
+            },
+            action_id: "mark_completed",
+            value: JSON.stringify({
+              opportunityId: opportunity.id,
+              userId: body.user.id
+            }),
+            style: "primary"
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
               text: "🔄 Find More Opportunities"
             },
             action_id: "search_again"
@@ -589,6 +736,148 @@ app.action('search_again', async ({ ack, respond }) => {
     text: "Use `/volunteer` command again to search for new opportunities!",
     replace_original: true
   });
+});
+
+// Mark volunteer work as completed and generate certificate
+app.action('mark_completed', async ({ body, ack, respond, client }) => {
+  await ack();
+
+  try {
+    const { opportunityId, userId } = JSON.parse(body.actions[0].value);
+
+    // Get user info from Slack
+    const userInfo = await client.users.info({ user: userId });
+    const volunteerName = userInfo.user.real_name || userInfo.user.display_name || userInfo.user.name;
+
+    // Mark work as completed
+    const completionData = await markVolunteerWorkCompleted(userId, opportunityId, volunteerName);
+
+    // Generate certificate
+    const certificateDataUri = await generateCertificate(completionData);
+
+    // Create completion confirmation with certificate
+    const completionBlocks = [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: "🎉 Volunteer Work Completed!"
+        }
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Congratulations ${volunteerName}!*\n\nYou have successfully completed your volunteer work for:\n*${completionData.activityTitle}*\n\n🏢 *Organization:* ${completionData.ngoName}\n📍 *Location:* ${completionData.location}\n📅 *Completion Date:* ${completionData.completionDate}\n🆔 *Certificate ID:* ${completionData.certificateId}`
+        }
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "🌟 *Thank you for making a positive impact in your community!*\n\nYour dedication to volunteer work helps make the world a better place. Keep up the amazing work!"
+        }
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "📄 Download Certificate"
+            },
+            action_id: "download_certificate",
+            value: completionData.certificateId,
+            style: "primary"
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "🔄 Find More Opportunities"
+            },
+            action_id: "search_again"
+          }
+        ]
+      }
+    ];
+
+    await respond({
+      blocks: completionBlocks,
+      replace_original: true
+    });
+
+    // Send certificate as a file to the user
+    try {
+      // Convert data URI to buffer for file upload
+      const base64Data = certificateDataUri.split(',')[1];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      await client.files.upload({
+        channels: userId,
+        file: buffer,
+        filename: `volunteer_certificate_${completionData.certificateId}.pdf`,
+        title: `Volunteer Certificate - ${completionData.activityTitle}`,
+        initial_comment: `🎉 Congratulations! Here's your certificate for completing volunteer work with ${completionData.ngoName}.`
+      });
+    } catch (fileError) {
+      console.error('Error sending certificate file:', fileError);
+      // Certificate generation succeeded, but file sending failed - not critical
+    }
+
+  } catch (error) {
+    console.error('Error in mark_completed action:', error);
+    await respond({
+      text: "Sorry, there was an error marking your volunteer work as completed. Please try again.",
+      replace_original: true
+    });
+  }
+});
+
+// Download certificate handler
+app.action('download_certificate', async ({ body, ack, respond, client }) => {
+  await ack();
+
+  try {
+    const certificateId = body.actions[0].value;
+    const completionData = completedVolunteerWork.get(certificateId);
+
+    if (!completionData) {
+      await respond({
+        text: "Certificate not found. Please contact support.",
+        replace_original: true
+      });
+      return;
+    }
+
+    // Generate certificate again
+    const certificateDataUri = await generateCertificate(completionData);
+
+    // Convert data URI to buffer for file upload
+    const base64Data = certificateDataUri.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    await client.files.upload({
+      channels: body.user.id,
+      file: buffer,
+      filename: `volunteer_certificate_${certificateId}.pdf`,
+      title: `Volunteer Certificate - ${completionData.activityTitle}`,
+      initial_comment: `📄 Here's your volunteer certificate for ${completionData.activityTitle}.`
+    });
+
+    await respond({
+      text: "📄 Your certificate has been sent to your DMs!",
+      replace_original: true
+    });
+
+  } catch (error) {
+    console.error('Error in download_certificate action:', error);
+    await respond({
+      text: "Sorry, there was an error generating your certificate. Please try again.",
+      replace_original: true
+    });
+  }
 });
 
 // Health check endpoint
