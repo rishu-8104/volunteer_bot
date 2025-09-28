@@ -744,11 +744,11 @@ const handleBookOpportunityWithResponseURL = async (body, responseUrl) => {
   console.log('=== handleBookOpportunityWithResponseURL called ===');
   console.log('Body:', JSON.stringify(body, null, 2));
   console.log('Response URL:', responseUrl);
-  
+
   try {
     const value = body.actions[0].value;
     console.log('Value:', value);
-    
+
     const [requestId, opportunityId] = value.split('_');
     console.log('Parsed values:', { requestId, opportunityId });
 
@@ -809,9 +809,45 @@ const sendSlackResponse = async (responseUrl, payload) => {
   }
 };
 
+// Function to send certificate file to user
+const sendCertificateToUser = async (userId, certificateBuffer, completionData) => {
+  try {
+    // Create FormData for file upload
+    const formData = new FormData();
+    formData.append('file', certificateBuffer, {
+      filename: `volunteer_certificate_${completionData.certificateId}.pdf`,
+      contentType: 'application/pdf'
+    });
+    formData.append('channels', userId);
+    formData.append('title', `Volunteer Certificate - ${completionData.activityTitle}`);
+    formData.append('initial_comment', `🎉 Congratulations! Here's your certificate for completing volunteer work with ${completionData.ngoName}.`);
+
+    // Send file to Slack using Web API
+    const response = await fetch('https://slack.com/api/files.upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+      },
+      body: formData
+    });
+
+    const result = await response.json();
+    console.log('Certificate upload result:', result);
+    
+    if (!result.ok) {
+      throw new Error(`Slack API error: ${result.error}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error sending certificate to user:', error);
+    throw error;
+  }
+};
+
 const handleMarkCompletedWithResponseURL = async (body, responseUrl) => {
   try {
-    const { opportunityId } = JSON.parse(body.actions[0].value);
+    const { opportunityId, userId } = JSON.parse(body.actions[0].value);
     
     // Find opportunity details
     const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
@@ -824,16 +860,50 @@ const handleMarkCompletedWithResponseURL = async (body, responseUrl) => {
       return;
     }
 
-    // Simple demo completion message
-    const completionText = `🎉 *DEMO: Volunteer Work Completed!*\n\n✅ *Congratulations!*\n\nYou have successfully completed your volunteer work for:\n*${opportunity.title}*\n\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Completion Date:* ${new Date().toLocaleDateString()}\n🆔 *Certificate ID:* CERT-DEMO-${Date.now()}\n\n🌟 *Thank you for making a positive impact in your community!*\n\n*This is a demo! In a real app, you would receive a professional certificate PDF.*\n\n💡 *Keep up the amazing work and continue volunteering!*`;
+    // Generate certificate data
+    const completionData = {
+      userId,
+      opportunityId,
+      volunteerName: body.user.name || 'Volunteer',
+      activityTitle: opportunity.title,
+      ngoName: opportunity.ngo_name,
+      location: opportunity.location,
+      completionDate: new Date().toLocaleDateString(),
+      certificateId: `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    };
+
+    // Store completion data
+    completedVolunteerWork.set(completionData.certificateId, completionData);
+
+    // Generate PDF certificate
+    const certificateDataUri = await generateCertificate(completionData);
+    
+    // Convert PDF to buffer for Slack file upload
+    const base64Data = certificateDataUri.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // Send completion message
+    const completionText = `🎉 *Volunteer Work Completed!*\n\n✅ *Congratulations!*\n\nYou have successfully completed your volunteer work for:\n*${opportunity.title}*\n\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Completion Date:* ${completionData.completionDate}\n🆔 *Certificate ID:* ${completionData.certificateId}\n\n🌟 *Thank you for making a positive impact in your community!*\n\n📄 *Your certificate has been generated and will be sent to your DMs shortly.*\n\n💡 *Keep up the amazing work and continue volunteering!*`;
 
     await sendSlackResponse(responseUrl, {
       text: completionText,
       replace_original: true
     });
 
+    // Send certificate as file to user's DMs
+    console.log('Certificate generated successfully:', completionData.certificateId);
+    console.log('PDF size:', buffer.length, 'bytes');
+    
+    // Send certificate file to user (requires Slack Web API)
+    try {
+      await sendCertificateToUser(completionData.userId, buffer, completionData);
+    } catch (fileError) {
+      console.error('Error sending certificate file:', fileError);
+      // Certificate generation succeeded, but file sending failed - not critical
+    }
+
   } catch (error) {
-    console.error('Error in demo completion:', error);
+    console.error('Error in completion:', error);
     await sendSlackResponse(responseUrl, {
       text: "Sorry, there was an error marking your volunteer work as completed. Please try again.",
       replace_original: true
@@ -885,9 +955,9 @@ const handleSearchAgainWithResponseURL = async (body, responseUrl) => {
 const handleShowAllOpportunitiesWithResponseURL = async (body, responseUrl) => {
   try {
     const { allMatches } = JSON.parse(body.actions[0].value);
-    
+
     let responseText = `🎯 *All ${allMatches.length} Opportunities*\n\n`;
-    
+
     allMatches.forEach((opp, index) => {
       responseText += `${index + 1}. *${opp.title}* - ${opp.ngo_name}\n   📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n   📧 ${opp.contact_email}\n   📝 ${opp.description}\n\n`;
     });
