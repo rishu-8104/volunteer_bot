@@ -741,14 +741,22 @@ app.action('show_all_opportunities', async ({ body, ack, respond }) => {
 
 // Handler functions for direct action handling
 const handleBookOpportunity = async (body, res) => {
+  console.log('=== handleBookOpportunity called ===');
+  console.log('Body:', JSON.stringify(body, null, 2));
+  
   try {
     const value = body.actions[0].value;
+    console.log('Value:', value);
+    
     const [requestId, opportunityId] = value.split('_');
+    console.log('Parsed values:', { requestId, opportunityId });
 
     // Find opportunity details from our array
     const opportunity = volunteerOpportunities.find(opp => opp.id === parseInt(opportunityId));
+    console.log('Found opportunity:', opportunity ? opportunity.title : 'NOT FOUND');
 
     if (!opportunity) {
+      console.log('Opportunity not found, sending error response');
       res.json({
         text: "Sorry, this opportunity is no longer available.",
         replace_original: true
@@ -761,13 +769,16 @@ const handleBookOpportunity = async (body, res) => {
     // Simple demo confirmation message
     const confirmationText = `✅ *DEMO: Opportunity Booked Successfully!*\n\n🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Date & Time:* ${dateStr} (${opportunity.time_slot})\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n📝 *What You'll Be Doing:* ${opportunity.description}\n📧 *Contact:* ${opportunity.contact_email}\n\n🎉 *This is a demo! In a real app, you would receive confirmation emails and the NGO would contact you.*\n\n💡 *Next Steps:*\n• Wait for NGO confirmation email\n• Prepare for the volunteer activity\n• Show up on time and make a difference! 🌟`;
 
+    console.log('Sending confirmation response');
     res.json({
       text: confirmationText,
       replace_original: true
     });
+    console.log('Response sent successfully');
 
   } catch (error) {
     console.error('Error in demo booking:', error);
+    console.error('Error stack:', error.stack);
     res.json({
       text: "Sorry, there was an error booking the opportunity. Please try again.",
       replace_original: true
@@ -778,10 +789,10 @@ const handleBookOpportunity = async (body, res) => {
 const handleMarkCompleted = async (body, res) => {
   try {
     const { opportunityId } = JSON.parse(body.actions[0].value);
-    
+
     // Find opportunity details
     const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
-    
+
     if (!opportunity) {
       res.json({
         text: "Opportunity not found.",
@@ -851,9 +862,9 @@ const handleSearchAgain = async (body, res) => {
 const handleShowAllOpportunities = async (body, res) => {
   try {
     const { allMatches } = JSON.parse(body.actions[0].value);
-    
+
     let responseText = `🎯 *All ${allMatches.length} Opportunities*\n\n`;
-    
+
     allMatches.forEach((opp, index) => {
       responseText += `${index + 1}. *${opp.title}* - ${opp.ngo_name}\n   📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n   📧 ${opp.contact_email}\n   📝 ${opp.description}\n\n`;
     });
@@ -878,10 +889,10 @@ app.action('mark_completed', async ({ body, ack, respond }) => {
 
   try {
     const { opportunityId } = JSON.parse(body.actions[0].value);
-    
+
     // Find opportunity details
     const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
-    
+
     if (!opportunity) {
       await respond({
         text: "Opportunity not found.",
