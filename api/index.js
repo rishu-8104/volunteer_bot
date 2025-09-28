@@ -597,24 +597,20 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
   }
 });
 
-// Handle opportunity booking with comprehensive confirmation
-app.action('book_opportunity', async ({ body, ack, respond, client }) => {
-  console.log('=== BOOK OPPORTUNITY ACTION TRIGGERED ===');
-  console.log('Action body:', JSON.stringify(body, null, 2));
-
+// Simple demo booking handler - just shows confirmation
+app.action('book_opportunity', async ({ body, ack, respond }) => {
+  console.log('=== DEMO BOOKING ACTION TRIGGERED ===');
+  
   await ack();
 
   try {
     const value = body.actions[0].value;
     const [requestId, opportunityId] = value.split('_');
 
-    console.log('Booking opportunity:', { requestId, opportunityId, value });
-
     // Find opportunity details from our array
     const opportunity = volunteerOpportunities.find(opp => opp.id === parseInt(opportunityId));
 
     if (!opportunity) {
-      console.error('Opportunity not found:', opportunityId);
       await respond({
         text: "Sorry, this opportunity is no longer available.",
         replace_original: true
@@ -624,129 +620,16 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
 
     const dateStr = opportunity.date_available ? new Date(opportunity.date_available).toLocaleDateString() : 'TBD';
 
-    // Create comprehensive confirmation message with blocks
-    const confirmationBlocks = [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: "✅ Opportunity Booked Successfully!"
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}`
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `📅 *Date & Time:*\n${dateStr} (${opportunity.time_slot})\n\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n\n📝 *What You'll Be Doing:*\n${opportunity.description}`
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `📧 *Contact Information:*\n${opportunity.contact_email}\n\n*Activity Type:* ${opportunity.activity_type.charAt(0).toUpperCase() + opportunity.activity_type.slice(1)}`
-        }
-      },
-      {
-        type: "divider"
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `🚀 *What Happens Next:*\n\n1️⃣ *Confirmation Email* - You'll receive a confirmation email within 24 hours\n2️⃣ *NGO Contact* - The organization will reach out with specific details and instructions\n3️⃣ *Team Coordination* - We'll help coordinate with your team members\n4️⃣ *Day of Event* - Show up at the specified time and location\n5️⃣ *Impact Made* - Make a difference in your community! 🌟`
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `💡 *Tips for Success:*\n• Arrive 10-15 minutes early\n• Bring water and snacks if needed\n• Wear appropriate clothing for the activity\n• Bring a positive attitude and willingness to help!\n• Take photos (with permission) to share your impact`
-        }
-      },
-      {
-        type: "actions",
-        elements: [
-          {
-          type: "button",
-          text: {
-            type: "plain_text",
-              text: "📅 Add to Calendar"
-            },
-            action_id: "add_to_calendar",
-            value: JSON.stringify({
-              opportunityId: opportunity.id,
-              title: opportunity.title,
-              date: opportunity.date_available,
-              time: opportunity.time_slot,
-              location: opportunity.location
-            })
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📧 Contact NGO"
-            },
-            action_id: "contact_ngo",
-          value: JSON.stringify({
-              email: opportunity.contact_email,
-              ngo: opportunity.ngo_name
-            })
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✅ Mark as Completed"
-            },
-            action_id: "mark_completed",
-            value: JSON.stringify({
-              opportunityId: opportunity.id,
-              userId: body.user.id
-            }),
-            style: "primary"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "🔄 Find More Opportunities"
-            },
-            action_id: "search_again"
-          }
-        ]
-      }
-    ];
+    // Simple demo confirmation message
+    const confirmationText = `✅ *DEMO: Opportunity Booked Successfully!*\n\n🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Date & Time:* ${dateStr} (${opportunity.time_slot})\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n📝 *What You'll Be Doing:* ${opportunity.description}\n📧 *Contact:* ${opportunity.contact_email}\n\n🎉 *This is a demo! In a real app, you would receive confirmation emails and the NGO would contact you.*\n\n💡 *Next Steps:*\n• Wait for NGO confirmation email\n• Prepare for the volunteer activity\n• Show up on time and make a difference! 🌟`;
 
-    // Try to send blocks first, fallback to text if it fails
-    try {
-      await respond({
-        blocks: confirmationBlocks,
-        replace_original: true
-      });
-    } catch (blocksError) {
-      console.error('Error sending booking confirmation blocks, falling back to text:', blocksError);
+    await respond({
+      text: confirmationText,
+      replace_original: true
+    });
 
-      // Fallback to simple text response
-      const textResponse = `✅ *Opportunity Booked Successfully!*\n\n🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Date & Time:* ${dateStr} (${opportunity.time_slot})\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n📝 *What You'll Be Doing:* ${opportunity.description}\n📧 *Contact Information:* ${opportunity.contact_email}\n\n🚀 *What Happens Next:*\n1️⃣ Confirmation email within 24 hours\n2️⃣ NGO will reach out with details\n3️⃣ Show up at the specified time and location\n4️⃣ Make a difference in your community! 🌟`;
-
-      await respond({
-        text: textResponse,
-        replace_original: true
-      });
-    }
-
-    // TODO: Send calendar invites, notify NGO, etc.
   } catch (error) {
-    console.error('Error in book_opportunity action:', error);
+    console.error('Error in demo booking:', error);
     await respond({
       text: "Sorry, there was an error booking the opportunity. Please try again.",
       replace_original: true
@@ -754,7 +637,7 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
   }
 });
 
-// Add to Calendar handler
+// Demo calendar handler
 app.action('add_to_calendar', async ({ body, ack, respond }) => {
   await ack();
 
@@ -762,11 +645,11 @@ app.action('add_to_calendar', async ({ body, ack, respond }) => {
     const { title, date, time, location } = JSON.parse(body.actions[0].value);
 
     await respond({
-      text: `📅 *Calendar Event Created*\n\n*Event:* ${title}\n*Date:* ${date}\n*Time:* ${time}\n*Location:* ${location}\n\n✅ Added to your calendar! You'll receive a reminder before the event.`,
+      text: `📅 *DEMO: Calendar Event Created*\n\n*Event:* ${title}\n*Date:* ${date}\n*Time:* ${time}\n*Location:* ${location}\n\n✅ *This is a demo! In a real app, this would add the event to your calendar.*`,
       replace_original: true
     });
   } catch (error) {
-    console.error('Error in add_to_calendar action:', error);
+    console.error('Error in demo calendar action:', error);
     await respond({
       text: "Sorry, there was an error adding to calendar. Please try again.",
       replace_original: true
@@ -774,7 +657,7 @@ app.action('add_to_calendar', async ({ body, ack, respond }) => {
   }
 });
 
-// Contact NGO handler
+// Demo contact NGO handler
 app.action('contact_ngo', async ({ body, ack, respond }) => {
   await ack();
 
@@ -782,11 +665,11 @@ app.action('contact_ngo', async ({ body, ack, respond }) => {
     const { email, ngo } = JSON.parse(body.actions[0].value);
 
     await respond({
-      text: `📧 *Contact Information*\n\n*Organization:* ${ngo}\n*Email:* ${email}\n\n💡 *Tips for contacting the NGO:*\n• Mention you're volunteering through CommuBot\n• Ask about specific requirements or materials to bring\n• Confirm the exact meeting location and time\n• Inquire about parking or public transportation options\n• Ask if there are any age restrictions or special requirements`,
+      text: `📧 *DEMO: Contact Information*\n\n*Organization:* ${ngo}\n*Email:* ${email}\n\n💡 *This is a demo! In a real app, you would:*\n• Receive pre-filled email templates\n• Get direct contact forms\n• See real-time availability\n• Get instant responses from NGOs\n\n*For now, you can contact them directly at the email above.*`,
       replace_original: true
     });
   } catch (error) {
-    console.error('Error in contact_ngo action:', error);
+    console.error('Error in demo contact action:', error);
     await respond({
       text: "Sorry, there was an error getting contact information. Please try again.",
       replace_original: true
@@ -856,96 +739,34 @@ app.action('show_all_opportunities', async ({ body, ack, respond }) => {
   }
 });
 
-// Mark volunteer work as completed and generate certificate
-app.action('mark_completed', async ({ body, ack, respond, client }) => {
+// Simple demo completion handler
+app.action('mark_completed', async ({ body, ack, respond }) => {
   await ack();
 
   try {
-    const { opportunityId, userId } = JSON.parse(body.actions[0].value);
+    const { opportunityId } = JSON.parse(body.actions[0].value);
+    
+    // Find opportunity details
+    const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
+    
+    if (!opportunity) {
+      await respond({
+        text: "Opportunity not found.",
+        replace_original: true
+      });
+      return;
+    }
 
-    // Get user info from Slack
-    const userInfo = await client.users.info({ user: userId });
-    const volunteerName = userInfo.user.real_name || userInfo.user.display_name || userInfo.user.name;
-
-    // Mark work as completed
-    const completionData = await markVolunteerWorkCompleted(userId, opportunityId, volunteerName);
-
-    // Generate certificate
-    const certificateDataUri = await generateCertificate(completionData);
-
-    // Create completion confirmation with certificate
-    const completionBlocks = [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: "🎉 Volunteer Work Completed!"
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `*Congratulations ${volunteerName}!*\n\nYou have successfully completed your volunteer work for:\n*${completionData.activityTitle}*\n\n🏢 *Organization:* ${completionData.ngoName}\n📍 *Location:* ${completionData.location}\n📅 *Completion Date:* ${completionData.completionDate}\n🆔 *Certificate ID:* ${completionData.certificateId}`
-        }
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "🌟 *Thank you for making a positive impact in your community!*\n\nYour dedication to volunteer work helps make the world a better place. Keep up the amazing work!"
-        }
-      },
-      {
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📄 Download Certificate"
-            },
-            action_id: "download_certificate",
-            value: completionData.certificateId,
-            style: "primary"
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "🔄 Find More Opportunities"
-            },
-            action_id: "search_again"
-          }
-        ]
-      }
-    ];
+    // Simple demo completion message
+    const completionText = `🎉 *DEMO: Volunteer Work Completed!*\n\n✅ *Congratulations!*\n\nYou have successfully completed your volunteer work for:\n*${opportunity.title}*\n\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Completion Date:* ${new Date().toLocaleDateString()}\n🆔 *Certificate ID:* CERT-DEMO-${Date.now()}\n\n🌟 *Thank you for making a positive impact in your community!*\n\n*This is a demo! In a real app, you would receive a professional certificate PDF.*\n\n💡 *Keep up the amazing work and continue volunteering!*`;
 
     await respond({
-      blocks: completionBlocks,
+      text: completionText,
       replace_original: true
     });
 
-    // Send certificate as a file to the user
-    try {
-      // Convert data URI to buffer for file upload
-      const base64Data = certificateDataUri.split(',')[1];
-      const buffer = Buffer.from(base64Data, 'base64');
-
-      await client.files.upload({
-        channels: userId,
-        file: buffer,
-        filename: `volunteer_certificate_${completionData.certificateId}.pdf`,
-        title: `Volunteer Certificate - ${completionData.activityTitle}`,
-        initial_comment: `🎉 Congratulations! Here's your certificate for completing volunteer work with ${completionData.ngoName}.`
-      });
-    } catch (fileError) {
-      console.error('Error sending certificate file:', fileError);
-      // Certificate generation succeeded, but file sending failed - not critical
-    }
-
   } catch (error) {
-    console.error('Error in mark_completed action:', error);
+    console.error('Error in demo completion:', error);
     await respond({
       text: "Sorry, there was an error marking your volunteer work as completed. Please try again.",
       replace_original: true
