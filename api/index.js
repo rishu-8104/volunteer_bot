@@ -508,8 +508,8 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
     ];
 
     if (matches.length > 0) {
-      // Add each opportunity as a section with booking button
-      matches.slice(0, 3).forEach((opp, index) => {
+      // Add each opportunity as a section with booking button (show up to 5 options)
+      matches.slice(0, 5).forEach((opp, index) => {
         blocks.push({
           type: "section",
           text: {
@@ -528,6 +528,27 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
           }
         });
       });
+      
+      // Add a "Show More" button if there are more than 5 matches
+      if (matches.length > 5) {
+        blocks.push({
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: `Show All ${matches.length} Opportunities`
+              },
+              action_id: "show_all_opportunities",
+              value: JSON.stringify({
+                requestId: savedRequest.id,
+                allMatches: matches
+              })
+            }
+          ]
+        });
+      }
     } else {
       blocks.push({
         type: "section",
@@ -538,9 +559,35 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
       });
     }
 
-    await respond({
-      blocks: blocks
-    });
+    // Try to send blocks first, fallback to text if it fails
+    try {
+      await respond({
+        blocks: blocks
+      });
+    } catch (blocksError) {
+      console.error('Error sending blocks, falling back to text:', blocksError);
+      
+      // Fallback to simple text response
+      let responseText = `🤝 *Volunteer Request Parsed*\n\n*Team Size:* ${parsed.teamSize} people\n*Activity:* ${parsed.activity}\n*When:* ${parsed.timing}\n\n🎯 *Found ${matches.length} matching opportunities:*\n\n`;
+      
+      if (matches.length > 0) {
+        const opportunityDetails = matches.slice(0, 5).map((opp, index) =>
+          `${index + 1}. *${opp.title}* - ${opp.ngo_name}\n   📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n   📧 ${opp.contact_email}\n   📝 ${opp.description}`
+        ).join('\n\n');
+        
+        responseText += `*Opportunity Details:*\n${opportunityDetails}`;
+        
+        if (matches.length > 5) {
+          responseText += `\n\n*Note:* Showing first 5 of ${matches.length} opportunities. Use the command again to see more!`;
+        }
+      } else {
+        responseText += "😔 No specific matches found. Try adjusting your search criteria.";
+      }
+      
+      await respond({
+        text: responseText
+      });
+    }
 
   } catch (error) {
     console.error('Error in /volunteer command:', error);
@@ -558,10 +605,13 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
     const value = body.actions[0].value;
     const [requestId, opportunityId] = value.split('_');
 
+    console.log('Booking opportunity:', { requestId, opportunityId, value });
+
     // Find opportunity details from our array
     const opportunity = volunteerOpportunities.find(opp => opp.id === parseInt(opportunityId));
 
     if (!opportunity) {
+      console.error('Opportunity not found:', opportunityId);
       await respond({
         text: "Sorry, this opportunity is no longer available.",
         replace_original: true
@@ -673,10 +723,23 @@ app.action('book_opportunity', async ({ body, ack, respond, client }) => {
       }
     ];
 
-    await respond({
-      blocks: confirmationBlocks,
-      replace_original: true
-    });
+    // Try to send blocks first, fallback to text if it fails
+    try {
+      await respond({
+        blocks: confirmationBlocks,
+        replace_original: true
+      });
+    } catch (blocksError) {
+      console.error('Error sending booking confirmation blocks, falling back to text:', blocksError);
+      
+      // Fallback to simple text response
+      const textResponse = `✅ *Opportunity Booked Successfully!*\n\n🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Date & Time:* ${dateStr} (${opportunity.time_slot})\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n📝 *What You'll Be Doing:* ${opportunity.description}\n📧 *Contact Information:* ${opportunity.contact_email}\n\n🚀 *What Happens Next:*\n1️⃣ Confirmation email within 24 hours\n2️⃣ NGO will reach out with details\n3️⃣ Show up at the specified time and location\n4️⃣ Make a difference in your community! 🌟`;
+      
+      await respond({
+        text: textResponse,
+        replace_original: true
+      });
+    }
 
     // TODO: Send calendar invites, notify NGO, etc.
   } catch (error) {
@@ -736,6 +799,58 @@ app.action('search_again', async ({ ack, respond }) => {
     text: "Use `/volunteer` command again to search for new opportunities!",
     replace_original: true
   });
+});
+
+// Show all opportunities handler
+app.action('show_all_opportunities', async ({ body, ack, respond }) => {
+  await ack();
+
+  try {
+    const { allMatches } = JSON.parse(body.actions[0].value);
+    
+    const blocks = [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: `🎯 All ${allMatches.length} Opportunities`
+        }
+      }
+    ];
+
+    // Show all opportunities
+    allMatches.forEach((opp, index) => {
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*${index + 1}. ${opp.title}*\n🏢 ${opp.ngo_name}\n📍 ${opp.location}\n📅 ${opp.time_slot}\n👥 Max ${opp.max_participants} volunteers\n📝 ${opp.description}`
+        },
+        accessory: {
+          type: "button",
+          text: {
+            type: "plain_text",
+            text: `Book ${index + 1}`
+          },
+          action_id: "book_opportunity",
+          value: `${Date.now()}_${opp.id}`, // Generate new request ID
+          style: "primary"
+        }
+      });
+    });
+
+    await respond({
+      blocks: blocks,
+      replace_original: true
+    });
+
+  } catch (error) {
+    console.error('Error in show_all_opportunities action:', error);
+    await respond({
+      text: "Sorry, there was an error showing all opportunities. Please try again.",
+      replace_original: true
+    });
+  }
 });
 
 // Mark volunteer work as completed and generate certificate
