@@ -739,16 +739,149 @@ app.action('show_all_opportunities', async ({ body, ack, respond }) => {
   }
 });
 
+// Handler functions for direct action handling
+const handleBookOpportunity = async (body, res) => {
+  try {
+    const value = body.actions[0].value;
+    const [requestId, opportunityId] = value.split('_');
+
+    // Find opportunity details from our array
+    const opportunity = volunteerOpportunities.find(opp => opp.id === parseInt(opportunityId));
+
+    if (!opportunity) {
+      res.json({
+        text: "Sorry, this opportunity is no longer available.",
+        replace_original: true
+      });
+      return;
+    }
+
+    const dateStr = opportunity.date_available ? new Date(opportunity.date_available).toLocaleDateString() : 'TBD';
+
+    // Simple demo confirmation message
+    const confirmationText = `✅ *DEMO: Opportunity Booked Successfully!*\n\n🎯 *${opportunity.title}*\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Date & Time:* ${dateStr} (${opportunity.time_slot})\n👥 *Capacity:* Up to ${opportunity.max_participants} volunteers\n📝 *What You'll Be Doing:* ${opportunity.description}\n📧 *Contact:* ${opportunity.contact_email}\n\n🎉 *This is a demo! In a real app, you would receive confirmation emails and the NGO would contact you.*\n\n💡 *Next Steps:*\n• Wait for NGO confirmation email\n• Prepare for the volunteer activity\n• Show up on time and make a difference! 🌟`;
+
+    res.json({
+      text: confirmationText,
+      replace_original: true
+    });
+
+  } catch (error) {
+    console.error('Error in demo booking:', error);
+    res.json({
+      text: "Sorry, there was an error booking the opportunity. Please try again.",
+      replace_original: true
+    });
+  }
+};
+
+const handleMarkCompleted = async (body, res) => {
+  try {
+    const { opportunityId } = JSON.parse(body.actions[0].value);
+    
+    // Find opportunity details
+    const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
+    
+    if (!opportunity) {
+      res.json({
+        text: "Opportunity not found.",
+        replace_original: true
+      });
+      return;
+    }
+
+    // Simple demo completion message
+    const completionText = `🎉 *DEMO: Volunteer Work Completed!*\n\n✅ *Congratulations!*\n\nYou have successfully completed your volunteer work for:\n*${opportunity.title}*\n\n🏢 *Organization:* ${opportunity.ngo_name}\n📍 *Location:* ${opportunity.location}\n📅 *Completion Date:* ${new Date().toLocaleDateString()}\n🆔 *Certificate ID:* CERT-DEMO-${Date.now()}\n\n🌟 *Thank you for making a positive impact in your community!*\n\n*This is a demo! In a real app, you would receive a professional certificate PDF.*\n\n💡 *Keep up the amazing work and continue volunteering!*`;
+
+    res.json({
+      text: completionText,
+      replace_original: true
+    });
+
+  } catch (error) {
+    console.error('Error in demo completion:', error);
+    res.json({
+      text: "Sorry, there was an error marking your volunteer work as completed. Please try again.",
+      replace_original: true
+    });
+  }
+};
+
+const handleAddToCalendar = async (body, res) => {
+  try {
+    const { title, date, time, location } = JSON.parse(body.actions[0].value);
+
+    res.json({
+      text: `📅 *DEMO: Calendar Event Created*\n\n*Event:* ${title}\n*Date:* ${date}\n*Time:* ${time}\n*Location:* ${location}\n\n✅ *This is a demo! In a real app, this would add the event to your calendar.*`,
+      replace_original: true
+    });
+  } catch (error) {
+    console.error('Error in demo calendar action:', error);
+    res.json({
+      text: "Sorry, there was an error adding to calendar. Please try again.",
+      replace_original: true
+    });
+  }
+};
+
+const handleContactNGO = async (body, res) => {
+  try {
+    const { email, ngo } = JSON.parse(body.actions[0].value);
+
+    res.json({
+      text: `📧 *DEMO: Contact Information*\n\n*Organization:* ${ngo}\n*Email:* ${email}\n\n💡 *This is a demo! In a real app, you would:*\n• Receive pre-filled email templates\n• Get direct contact forms\n• See real-time availability\n• Get instant responses from NGOs\n\n*For now, you can contact them directly at the email above.*`,
+      replace_original: true
+    });
+  } catch (error) {
+    console.error('Error in demo contact action:', error);
+    res.json({
+      text: "Sorry, there was an error getting contact information. Please try again.",
+      replace_original: true
+    });
+  }
+};
+
+const handleSearchAgain = async (body, res) => {
+  res.json({
+    text: "Use `/volunteer` command again to search for new opportunities!",
+    replace_original: true
+  });
+};
+
+const handleShowAllOpportunities = async (body, res) => {
+  try {
+    const { allMatches } = JSON.parse(body.actions[0].value);
+    
+    let responseText = `🎯 *All ${allMatches.length} Opportunities*\n\n`;
+    
+    allMatches.forEach((opp, index) => {
+      responseText += `${index + 1}. *${opp.title}* - ${opp.ngo_name}\n   📍 ${opp.location} | 📅 ${opp.time_slot} | 👥 Max ${opp.max_participants}\n   📧 ${opp.contact_email}\n   📝 ${opp.description}\n\n`;
+    });
+
+    res.json({
+      text: responseText,
+      replace_original: true
+    });
+
+  } catch (error) {
+    console.error('Error in show_all_opportunities action:', error);
+    res.json({
+      text: "Sorry, there was an error showing all opportunities. Please try again.",
+      replace_original: true
+    });
+  }
+};
+
 // Simple demo completion handler
 app.action('mark_completed', async ({ body, ack, respond }) => {
   await ack();
 
   try {
     const { opportunityId } = JSON.parse(body.actions[0].value);
-
+    
     // Find opportunity details
     const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
-
+    
     if (!opportunity) {
       await respond({
         text: "Opportunity not found.",
@@ -877,34 +1010,71 @@ expressApp.post('/slack/commands', (req, res) => {
   }
 });
 
-// Interactive components handler - parse Slack payload properly
-expressApp.post('/slack/interactive', (req, res) => {
+// Interactive components handler - direct action handling
+expressApp.post('/slack/interactive', async (req, res) => {
   console.log('=== Interactive Components POST Endpoint Hit ===');
   console.log('Method:', req.method);
   console.log('Raw body:', req.body);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
 
   try {
-    // Parse the Slack payload if it's URL-encoded
+    // Parse the Slack payload
     let payload;
     if (req.body.payload) {
       payload = JSON.parse(req.body.payload);
       console.log('Parsed payload:', JSON.stringify(payload, null, 2));
-      
-      // Create a new request object with the parsed payload
-      const newReq = {
-        ...req,
-        body: payload
-      };
-      
-      console.log('Calling receiver.requestHandler for interactive components...');
-      receiver.requestHandler(newReq, res);
     } else {
-      console.log('No payload found, calling receiver directly...');
-      receiver.requestHandler(req, res);
+      console.log('No payload found');
+      res.status(400).json({ error: 'No payload found' });
+      return;
     }
-    
-    console.log('receiver.requestHandler completed for interactive components');
+
+    // Handle the action directly
+    if (payload.type === 'block_actions' && payload.actions && payload.actions.length > 0) {
+      const action = payload.actions[0];
+      console.log('Processing action:', action.action_id, 'with value:', action.value);
+
+      // Create a mock body object for our action handlers
+      const mockBody = {
+        actions: [action],
+        user: payload.user,
+        team: payload.team,
+        channel: payload.channel
+      };
+
+      // Create a mock response object
+      const mockRes = {
+        status: (code) => ({ json: (data) => res.status(code).json(data) }),
+        json: (data) => res.json(data)
+      };
+
+      // Handle different action types
+      if (action.action_id === 'book_opportunity') {
+        console.log('Handling book_opportunity action');
+        await handleBookOpportunity(mockBody, mockRes);
+      } else if (action.action_id === 'mark_completed') {
+        console.log('Handling mark_completed action');
+        await handleMarkCompleted(mockBody, mockRes);
+      } else if (action.action_id === 'add_to_calendar') {
+        console.log('Handling add_to_calendar action');
+        await handleAddToCalendar(mockBody, mockRes);
+      } else if (action.action_id === 'contact_ngo') {
+        console.log('Handling contact_ngo action');
+        await handleContactNGO(mockBody, mockRes);
+      } else if (action.action_id === 'search_again') {
+        console.log('Handling search_again action');
+        await handleSearchAgain(mockBody, mockRes);
+      } else if (action.action_id === 'show_all_opportunities') {
+        console.log('Handling show_all_opportunities action');
+        await handleShowAllOpportunities(mockBody, mockRes);
+      } else {
+        console.log('Unknown action:', action.action_id);
+        res.json({ text: 'Unknown action' });
+      }
+    } else {
+      console.log('Not a block_actions event');
+      res.json({ text: 'Not a block_actions event' });
+    }
+
   } catch (error) {
     console.error('❌ Error in interactive components:', error);
     console.error('Error stack:', error.stack);
