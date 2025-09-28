@@ -600,7 +600,7 @@ app.command('/volunteer', async ({ command, ack, respond, client }) => {
 // Simple demo booking handler - just shows confirmation
 app.action('book_opportunity', async ({ body, ack, respond }) => {
   console.log('=== DEMO BOOKING ACTION TRIGGERED ===');
-  
+
   await ack();
 
   try {
@@ -745,10 +745,10 @@ app.action('mark_completed', async ({ body, ack, respond }) => {
 
   try {
     const { opportunityId } = JSON.parse(body.actions[0].value);
-    
+
     // Find opportunity details
     const opportunity = volunteerOpportunities.find(opp => opp.id === opportunityId);
-    
+
     if (!opportunity) {
       await respond({
         text: "Opportunity not found.",
@@ -877,17 +877,33 @@ expressApp.post('/slack/commands', (req, res) => {
   }
 });
 
-// Interactive components handler - direct POST handler
+// Interactive components handler - parse Slack payload properly
 expressApp.post('/slack/interactive', (req, res) => {
   console.log('=== Interactive Components POST Endpoint Hit ===');
   console.log('Method:', req.method);
-  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('Raw body:', req.body);
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
 
   try {
-    // Handle interactive components using the receiver
-    console.log('Calling receiver.requestHandler for interactive components...');
-    receiver.requestHandler(req, res);
+    // Parse the Slack payload if it's URL-encoded
+    let payload;
+    if (req.body.payload) {
+      payload = JSON.parse(req.body.payload);
+      console.log('Parsed payload:', JSON.stringify(payload, null, 2));
+      
+      // Create a new request object with the parsed payload
+      const newReq = {
+        ...req,
+        body: payload
+      };
+      
+      console.log('Calling receiver.requestHandler for interactive components...');
+      receiver.requestHandler(newReq, res);
+    } else {
+      console.log('No payload found, calling receiver directly...');
+      receiver.requestHandler(req, res);
+    }
+    
     console.log('receiver.requestHandler completed for interactive components');
   } catch (error) {
     console.error('❌ Error in interactive components:', error);
